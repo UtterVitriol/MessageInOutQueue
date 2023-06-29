@@ -8,6 +8,8 @@
 #include <functional>
 #include <Windows.h>
 
+//handler
+// single message queue
 
 class Message
 {
@@ -28,30 +30,98 @@ private:
 
 Message* MessageFactory(int in);
 
-class MessageQueue
+template <typename T>
+class MyQueue
 {
 public:
-	MessageQueue();
-	void QueueIn(Message* Message);
-	void QueueOut(Message* Message);
+	void Enqueue(T Data)
+	{
+		{
+			std::unique_lock<std::mutex> lock(m_Mutex);
+			m_Queue.push(Data);
+		}
 
-	Message* WaitForMessage(void);
+		m_Condition.notify_one();
+	}
+
+	T Dequeue()
+	{
+		T Data;
+		{
+			std::unique_lock<std::mutex> lock(m_Mutex);
+
+			m_Condition.wait(lock, [this] {
+				return !m_Queue.empty();
+				});
+			Data = m_Queue.front();
+			m_Queue.pop();
+		}
+
+		return Data;
+	}
+
+	DWORD Size() { return m_Queue.size(); }
+
 
 private:
+	std::mutex  m_Mutex;
+	std::condition_variable m_Condition;
+	std::queue<T> m_Queue;
 
+};
 
-	std::mutex in_mutex;
-	std::condition_variable in_mutex_condition;
+template <typename T,typename F1, typename F2>
+class InOutQueue
+{
+public:
+	InOutQueue(F1 InHandler, F2 OutHandler)
+		:
+		m_InHandler(InHandler),
+		m_OutHandler(OutHandler)
 
-	std::mutex out_mutex;
-	std::condition_variable out_mutex_condition;
+	{
+		m_hEvents[0] = CreateSemaphore(NULL, 0, LONG_MAX, NULL);
+		m_hEvents[1] = CreateSemaphore(NULL, 0, LONG_MAX, NULL);
+	}
 
-	HANDLE hInEvent;
-	HANDLE hOutEvent;
+	void  QueueIn(T Data)
+	{
+		m_In.Enqueue(Data);
+		ReleaseSemaphore(m_hEvents[In], 1, NULL);
+	}
 
-	HANDLE hEvents[2];
+	void QueueOut(T Data)
+	{
+		m_Out.Enqueue(Data);
+		ReleaseSemaphore(m_hEvents[Out], 1, NULL);
+	}
 
-	std::queue<Message*> MessageIn;
-	std::queue<Message*> MessageOut;
+	void WaitForMessage()
+	{
+		DWORD dwEvent = 0;
+		for (;;) {
+			dwEvent = WaitForMultipleObjects(2, m_hEvents, FALSE, INFINITE);
 
+			if (WAIT_OBJECT_0 == dwEvent) {
+				// Thread
+				m_InHandler(m_In.Dequeue());
+				
+			}
+			else if (WAIT_OBJECT_0 + 1 == dwEvent) {
+				// Thread
+				m_OutHandler(m_Out.Dequeue());
+			}
+			else {
+				printf("REEE: %ul\n", dwEvent);
+			}
+		}
+	}
+
+private:
+	enum m_Events{In, Out};
+	HANDLE m_hEvents[2];
+	MyQueue<T> m_In;
+	MyQueue<T> m_Out;
+	F1 m_InHandler;
+	F2 m_OutHandler;
 };
