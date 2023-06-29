@@ -4,7 +4,8 @@ void ThreadPool::Start()
 {
 	const uint32_t num_threads = std::thread::hardware_concurrency(); // Max # of threads the system supports
 	threads.resize(num_threads);
-	for (uint32_t i = 0; i < num_threads; i++) {
+	for (uint32_t i = 0; i < num_threads; i++) 
+	{
 		threads.at(i) = std::thread(ThreadLoop);
 	}
 }
@@ -25,7 +26,8 @@ void ThreadPool::Stop()
 		should_terminate = true;
 	}
 	mutex_condition.notify_all();
-	for (std::thread& active_thread : threads) {
+	for (std::thread& active_thread : threads) 
+	{
 		active_thread.join();
 	}
 	threads.clear();
@@ -47,11 +49,14 @@ void ThreadPool::ThreadLoop() {
 		{
 			std::unique_lock<std::mutex> lock(queue_mutex);
 
-			mutex_condition.wait(lock, [this] {
+			mutex_condition.wait(lock, [this] 
+				{
 				return !jobs.empty() || should_terminate;
-				});
+				}
+			);
 
-			if (should_terminate) {
+			if (should_terminate)
+			{
 				return;
 			}
 

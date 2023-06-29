@@ -13,13 +13,6 @@ void test(MessageQueue *que)
 	que->QueueIn(ree);
 }
 
-struct job
-{
-	int tid;
-	int cchunk;
-	int tchunk;
-	void* msg;
-};
 
 int main()
 {
